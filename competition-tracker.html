@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比赛日程冲突检测</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4a6fa5;
+            --secondary-color: #166088;
+            --accent-color: #f18f01;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: var(--dark-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .data-source-info {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-top: 15px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+            background-color: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+        }
+        
+        .search-box, .filter-options {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .search-box input, .filter-options select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+        
+        .btn-refresh {
+            background-color: var(--success-color);
+        }
+        
+        .btn-refresh:hover {
+            background-color: #218838;
+        }
+        
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            flex: 1;
+            min-width: 150px;
+            background-color: white;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .date-section {
+            margin-bottom: 30px;
+        }
+        
+        .date-header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .date-header.conflict {
+            background-color: var(--danger-color);
+        }
+        
+        .date-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .conflict-badge {
+            background-color: white;
+            color: var(--danger-color);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+        
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 0 0 var(--border-radius) var(--border-radius);
+        }
+        
+        .competition-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: var(--box-shadow);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .competition-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .competition-card.conflict {
+            border-left: 5px solid var(--danger-color);
+        }
+        
+        .conflict-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: var(--danger-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .card-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .competition-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+        
+        .competition-time {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--secondary-color);
+            font-weight: 500;
+        }
+        
+        .card-details {
+            margin-bottom: 15px;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            min-width: 120px;
+            color: #666;
+        }
+        
+        .detail-value {
+            flex: 1;
+        }
+        
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .fee-badge {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .register-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .register-link:hover {
+            text-decoration: underline;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+            font-size: 1.2rem;
+            grid-column: 1 / -1;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            grid-column: 1 / -1;
+        }
+        
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary-color);
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            .search-box, .filter-options {
+                min-width: 100%;
+            }
+            
+            .date-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-calendar-alt"></i> 比赛日程冲突检测系统</h1>
+            <p class="subtitle">按日期分组显示比赛，突出显示时间冲突，数据直接从Excel文件动态加载</p>
+            
+            <div class="data-source-info">
+                <i class="fas fa-database"></i>
+                <div>
+                    <strong>数据源：</strong> 
+                    <a href="https://raw.githubusercontent.com/winterx04/competition-list/main/Competition.xlsx" 
+                       target="_blank" style="color: var(--primary-color);">
+                        https://raw.githubusercontent.com/winterx04/competition-list/main/Competition.xlsx
+                    </a>
+                </div>
+                <div id="lastUpdated" style="font-size: 0.8rem; color: #666; margin-left: auto;">
+                    最后更新: 加载中...
+                </div>
+            </div>
+        </header>
+        
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="搜索比赛名称、地点或联系人...">
+            </div>
+            <div class="filter-options">
+                <select id="filterOption">
+                    <option value="all">所有比赛</option>
+                    <option value="conflict">仅显示冲突比赛</option>
+                    <option value="free">仅显示免费比赛</option>
+                    <option value="paid">仅显示付费比赛</option>
+                    <option value="upcoming">即将到来的比赛</option>
+                </select>
+            </div>
+            <div class="actions">
+                <button class="btn btn-refresh" id="refreshBtn">
+                    <i class="fas fa-sync-alt"></i> 刷新数据
+                </button>
+                <button class="btn" id="exportBtn">
+                    <i class="fas fa-download"></i> 导出数据
+                </button>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalCompetitions">0</div>
+                <div class="stat-label">总比赛数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="conflictCount">0</div>
+                <div class="stat-label">冲突比赛数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="dateCount">0</div>
+                <div class="stat-label">比赛日期</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="freeCount">0</div>
+                <div class="stat-label">免费比赛</div>
+            </div>
+        </div>
+        
+        <div id="competitionsContainer">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                正在从GitHub加载比赛数据...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 固定的Excel文件URL
+        const EXCEL_FILE_URL = 'https://raw.githubusercontent.com/winterx04/competition-list/main/Competition.xlsx';
+        
+        let competitions = [];
+        let filteredCompetitions = [];
+        let conflictsByDate = {};
+        let lastUpdateTime = null;
+
+        // DOM元素
+        const competitionsContainer = document.getElementById('competitionsContainer');
+        const searchInput = document.getElementById('searchInput');
+        const filterOption = document.getElementById('filterOption');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const lastUpdatedEl = document.getElementById('lastUpdated');
+        const totalCompetitionsEl = document.getElementById('totalCompetitions');
+        const conflictCountEl = document.getElementById('conflictCount');
+        const dateCountEl = document.getElementById('dateCount');
+        const freeCountEl = document.getElementById('freeCount');
+
+        // 初始化 - 页面加载时自动获取数据
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+            loadDataFromUrl();
+        });
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            searchInput.addEventListener('input', filterCompetitions);
+            filterOption.addEventListener('change', filterCompetitions);
+            refreshBtn.addEventListener('click', refreshData);
+            exportBtn.addEventListener('click', exportData);
+        }
+
+        // 从URL加载Excel数据
+        async function loadDataFromUrl() {
+            showLoading();
+            
+            try {
+                console.log('正在从GitHub加载Excel文件:', EXCEL_FILE_URL);
+                
+                // 添加时间戳防止缓存
+                const urlWithTimestamp = `${EXCEL_FILE_URL}?t=${Date.now()}`;
+                const response = await fetch(urlWithTimestamp);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                console.log('Excel文件加载成功，大小:', arrayBuffer.byteLength, 'bytes');
+                
+                const data = new Uint8Array(arrayBuffer);
+                
+                // 解析Excel数据
+                const workbook = XLSX.read(data, { type: 'array' });
+                console.log('Excel工作表:', workbook.SheetNames);
+                
+                // 获取第一个工作表
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // 转换为JSON
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                console.log('原始数据行数:', jsonData.length);
+                
+                // 提取表头和数据
+                const headers = jsonData[0];
+                console.log('表头:', headers);
+                
+                const rows = jsonData.slice(1);
+                console.log('数据行数:', rows.length);
+                
+                // 转换为对象数组
+                const competitionsData = rows.map((row, index) => {
+                    const obj = {};
+                    headers.forEach((header, colIndex) => {
+                        // 处理表头中的空格和特殊字符
+                        const cleanHeader = header ? header.toString().trim() : `Column${colIndex}`;
+                        obj[cleanHeader] = row[colIndex] !== undefined && row[colIndex] !== null ? row[colIndex] : '';
+                    });
+                    
+                    // 确保ID字段存在
+                    if (!obj.ID && obj.ID !== 0) {
+                        obj.ID = index + 1;
+                    }
+                    
+                    return obj;
+                }).filter(obj => {
+                    // 过滤空行 - 如果NAME为空则过滤
+                    const hasName = obj.NAME && obj.NAME.toString().trim() !== '';
+                    const hasDate = obj.DATE && obj.DATE.toString().trim() !== '';
+                    return hasName || hasDate;
+                });
+                
+                console.log('处理后的比赛数据:', competitionsData);
+                
+                // 记录更新时间
+                lastUpdateTime = new Date();
+                lastUpdatedEl.textContent = `最后更新: ${lastUpdateTime.toLocaleTimeString('zh-CN')}`;
+                
+                // 加载比赛数据
+                loadCompetitions(competitionsData);
+                
+                showNotification(`成功加载 ${competitionsData.length} 条比赛数据`, 'success');
+                
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showNotification(`加载失败: ${error.message}`, 'error');
+                
+                competitionsContainer.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-exclamation-triangle fa-3x" style="margin-bottom: 20px; color: #f0ad4e;"></i>
+                        <p>加载数据失败</p>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">${error.message}</p>
+                        <p style="font-size: 0.8rem; margin-top: 5px;">请检查网络连接或文件URL是否正确</p>
+                        <button class="btn" onclick="loadDataFromUrl()" style="margin-top: 15px;">
+                            <i class="fas fa-redo"></i> 重试加载
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // 加载比赛数据
+        function loadCompetitions(data) {
+            competitions = data;
+            console.log('加载的比赛数据:', competitions);
+            
+            // 检测冲突
+            detectConflicts();
+            
+            // 初始筛选
+            filterCompetitions();
+        }
+
+        // 检测时间冲突
+        function detectConflicts() {
+            conflictsByDate = {};
+            
+            // 按日期分组
+            const competitionsByDate = {};
+            competitions.forEach(comp => {
+                let dateStr = '';
+                if (comp.DATE) {
+                    // 处理Excel日期格式
+                    if (typeof comp.DATE === 'number') {
+                        // Excel日期序列号
+                        const excelDate = comp.DATE;
+                        const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                        dateStr = date.toISOString().split('T')[0];
+                    } else {
+                        // 字符串日期
+                        dateStr = comp.DATE.toString().split(' ')[0];
+                        // 清理日期字符串
+                        dateStr = dateStr.replace(/[^0-9\-]/g, '');
+                    }
+                }
+                
+                if (dateStr && dateStr !== '') {
+                    if (!competitionsByDate[dateStr]) {
+                        competitionsByDate[dateStr] = [];
+                    }
+                    competitionsByDate[dateStr].push(comp);
+                }
+            });
+            
+            console.log('按日期分组的比赛:', competitionsByDate);
+            
+            // 检测每个日期内的冲突
+            Object.keys(competitionsByDate).forEach(date => {
+                const compsOnDate = competitionsByDate[date];
+                
+                // 如果当天只有一场比赛，没有冲突
+                if (compsOnDate.length <= 1) {
+                    return;
+                }
+                
+                // 转换时间为可比较的分钟数
+                const timeSlots = [];
+                compsOnDate.forEach(comp => {
+                    if (comp.TIME && comp.TIME.toString().trim() !== '') {
+                        const timeInMinutes = convertTimeToMinutes(comp.TIME.toString());
+                        if (timeInMinutes > 0) {
+                            timeSlots.push({
+                                comp,
+                                start: timeInMinutes,
+                                end: timeInMinutes + 60 // 假设每场比赛持续60分钟
+                            });
+                        }
+                    }
+                });
+                
+                // 检测时间重叠
+                const conflicts = [];
+                for (let i = 0; i < timeSlots.length; i++) {
+                    for (let j = i + 1; j < timeSlots.length; j++) {
+                        if (timeSlotsOverlap(timeSlots[i], timeSlots[j])) {
+                            conflicts.push(timeSlots[i].comp.ID.toString());
+                            conflicts.push(timeSlots[j].comp.ID.toString());
+                        }
+                    }
+                }
+                
+                // 如果有冲突，记录到冲突对象中
+                if (conflicts.length > 0) {
+                    conflictsByDate[date] = [...new Set(conflicts)]; // 去重
+                    console.log(`日期 ${date} 发现冲突:`, conflictsByDate[date]);
+                }
+            });
+            
+            console.log('冲突检测结果:', conflictsByDate);
+        }
+
+        // 转换时间字符串为分钟数
+        function convertTimeToMinutes(timeStr) {
+            if (!timeStr) return 0;
+            
+            const str = timeStr.toString().trim().toUpperCase();
+            
+            // 处理时间格式 (如 "09:00AM", "02:00PM", "9:00 AM", "14:00")
+            let timeMatch = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            
+            if (!timeMatch) {
+                // 尝试其他格式
+                timeMatch = str.match(/(\d{1,2})\s*(AM|PM)/i);
+                if (timeMatch) {
+                    return convertSimpleTime(timeMatch[1], timeMatch[2]);
+                }
+                return 0;
+            }
+            
+            let hours = parseInt(timeMatch[1]);
+            const minutes = parseInt(timeMatch[2]);
+            const period = timeMatch[3] ? timeMatch[3].toUpperCase() : '';
+            
+            if (period === 'PM' && hours < 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            
+            // 如果没有AM/PM标记，但小时数>12，可能是24小时制
+            if (!period && hours > 12 && hours <= 23) {
+                // 已经是24小时制
+            } else if (!period && hours <= 12) {
+                // 假设为24小时制，但小时数<=12，无法确定是AM还是PM
+                // 这里假设为白天时间（9:00可能是上午9点）
+            }
+            
+            return hours * 60 + minutes;
+        }
+
+        // 转换简单时间格式（如 "9 AM"）
+        function convertSimpleTime(hourStr, period) {
+            let hours = parseInt(hourStr);
+            if (period.toUpperCase() === 'PM' && hours < 12) hours += 12;
+            if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+            return hours * 60;
+        }
+
+        // 检查两个时间段是否重叠
+        function timeSlotsOverlap(slot1, slot2) {
+            return !(slot1.end <= slot2.start || slot2.end <= slot1.start);
+        }
+
+        // 筛选比赛
+        function filterCompetitions() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filterValue = filterOption.value;
+            
+            filteredCompetitions = competitions.filter(comp => {
+                // 搜索过滤
+                if (searchTerm) {
+                    const compName = comp.NAME ? comp.NAME.toString().toLowerCase() : '';
+                    const compLocation = comp.LOCATION ? comp.LOCATION.toString().toLowerCase() : '';
+                    const compContact = comp["CONTACT NUMBER"] ? comp["CONTACT NUMBER"].toString().toLowerCase() : '';
+                    
+                    const matchesSearch = 
+                        compName.includes(searchTerm) ||
+                        compLocation.includes(searchTerm) ||
+                        compContact.includes(searchTerm);
+                    
+                    if (!matchesSearch) return false;
+                }
+                
+                // 筛选器过滤
+                const compFee = comp.FEE ? comp.FEE.toString().trim() : '';
+                switch(filterValue) {
+                    case 'conflict':
+                        if (!comp.DATE) return false;
+                        let dateStr = '';
+                        if (typeof comp.DATE === 'number') {
+                            // Excel日期序列号
+                            const excelDate = comp.DATE;
+                            const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                            dateStr = date.toISOString().split('T')[0];
+                        } else {
+                            dateStr = comp.DATE.toString().split(' ')[0];
+                            dateStr = dateStr.replace(/[^0-9\-]/g, '');
+                        }
+                        return conflictsByDate[dateStr] && conflictsByDate[dateStr].includes(comp.ID.toString());
+                    case 'free':
+                        return !compFee || compFee === '' || compFee === '0';
+                    case 'paid':
+                        return compFee && compFee !== '' && compFee !== '0';
+                    case 'upcoming':
+                        if (!comp.DATE) return false;
+                        try {
+                            let compDate;
+                            if (typeof comp.DATE === 'number') {
+                                // Excel日期序列号
+                                const excelDate = comp.DATE;
+                                compDate = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                            } else {
+                                compDate = new Date(comp.DATE);
+                            }
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return compDate >= today;
+                        } catch (e) {
+                            return false;
+                        }
+                    default:
+                        return true;
+                }
+            });
+            
+            updateStats();
+            displayCompetitions();
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const total = competitions.length;
+            const filteredTotal = filteredCompetitions.length;
+            
+            // 计算冲突比赛数
+            let conflictCount = 0;
+            competitions.forEach(comp => {
+                if (comp.DATE) {
+                    let dateStr = '';
+                    if (typeof comp.DATE === 'number') {
+                        // Excel日期序列号
+                        const excelDate = comp.DATE;
+                        const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                        dateStr = date.toISOString().split('T')[0];
+                    } else {
+                        dateStr = comp.DATE.toString().split(' ')[0];
+                        dateStr = dateStr.replace(/[^0-9\-]/g, '');
+                    }
+                    if (conflictsByDate[dateStr] && conflictsByDate[dateStr].includes(comp.ID.toString())) {
+                        conflictCount++;
+                    }
+                }
+            });
+            
+            // 计算唯一日期数
+            const uniqueDates = [...new Set(competitions
+                .filter(comp => comp.DATE)
+                .map(comp => {
+                    if (typeof comp.DATE === 'number') {
+                        const excelDate = comp.DATE;
+                        const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                        return date.toISOString().split('T')[0];
+                    } else {
+                        const dateStr = comp.DATE.toString().split(' ')[0];
+                        return dateStr.replace(/[^0-9\-]/g, '');
+                    }
+                }))];
+            
+            // 计算免费比赛数
+            const freeCount = competitions.filter(comp => {
+                const fee = comp.FEE ? comp.FEE.toString().trim() : '';
+                return !fee || fee === '' || fee === '0';
+            }).length;
+            
+            totalCompetitionsEl.textContent = filteredTotal;
+            conflictCountEl.textContent = conflictCount;
+            dateCountEl.textContent = uniqueDates.length;
+            freeCountEl.textContent = freeCount;
+        }
+
+        // 显示比赛
+        function displayCompetitions() {
+            if (filteredCompetitions.length === 0) {
+                competitionsContainer.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-calendar-times fa-3x" style="margin-bottom: 20px; color: #ccc;"></i>
+                        <p>没有找到匹配的比赛</p>
+                        <p style="font-size: 0.9rem; margin-top: 10px;">尝试更改搜索词或筛选条件</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 按日期分组
+            const competitionsByDate = {};
+            filteredCompetitions.forEach(comp => {
+                let dateKey = '未指定日期';
+                let displayDate = '未指定日期';
+                
+                if (comp.DATE) {
+                    if (typeof comp.DATE === 'number') {
+                        // Excel日期序列号
+                        const excelDate = comp.DATE;
+                        const date = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                        dateKey = date.toISOString().split('T')[0];
+                        displayDate = date;
+                    } else {
+                        // 字符串日期
+                        const dateStr = comp.DATE.toString().split(' ')[0];
+                        dateKey = dateStr.replace(/[^0-9\-]/g, '');
+                        displayDate = comp.DATE;
+                    }
+                }
+                
+                if (!competitionsByDate[dateKey]) {
+                    competitionsByDate[dateKey] = [];
+                }
+                
+                // 保存原始日期对象用于排序和显示
+                const compWithDateInfo = {
+                    ...comp,
+                    _dateKey: dateKey,
+                    _displayDate: displayDate
+                };
+                
+                competitionsByDate[dateKey].push(compWithDateInfo);
+            });
+            
+            // 按日期排序（排除"未指定日期"）
+            const sortedDates = Object.keys(competitionsByDate)
+                .filter(date => date !== '未指定日期')
+                .sort((a, b) => new Date(a) - new Date(b));
+            
+            // 如果有未指定日期的比赛，添加到末尾
+            if (competitionsByDate['未指定日期']) {
+                sortedDates.push('未指定日期');
+            }
+            
+            // 生成HTML
+            let html = '';
+            
+            sortedDates.forEach(dateKey => {
+                const compsOnDate = competitionsByDate[dateKey];
+                const hasConflict = conflictsByDate[dateKey] && conflictsByDate[dateKey].length > 0;
+                const conflictCount = hasConflict ? conflictsByDate[dateKey].length : 0;
+                
+                // 格式化日期显示
+                let formattedDate = dateKey;
+                if (dateKey !== '未指定日期') {
+                    try {
+                        let dateObj;
+                        if (typeof compsOnDate[0]._displayDate === 'string') {
+                            dateObj = new Date(compsOnDate[0]._displayDate);
+                        } else {
+                            dateObj = compsOnDate[0]._displayDate;
+                        }
+                        
+                        if (dateObj instanceof Date && !isNaN(dateObj)) {
+                            formattedDate = dateObj.toLocaleDateString('zh-CN', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                weekday: 'long'
+                            });
+                        } else {
+                            formattedDate = dateKey;
+                        }
+                    } catch (e) {
+                        formattedDate = dateKey;
+                    }
+                }
+                
+                html += `
+                    <div class="date-section">
+                        <div class="date-header ${hasConflict ? 'conflict' : ''}">
+                            <div class="date-title">
+                                <i class="fas fa-calendar-day"></i>
+                                ${formattedDate}
+                                ${hasConflict ? `<span class="conflict-badge"><i class="fas fa-exclamation-triangle"></i> ${conflictCount} 场冲突</span>` : ''}
+                            </div>
+                            <div style="font-size: 0.9rem;">
+                                ${compsOnDate.length} 场比赛
+                            </div>
+                        </div>
+                        <div class="cards-container">
+                `;
+                
+                compsOnDate.forEach(comp => {
+                    const datePart = comp._dateKey;
+                    const isConflict = conflictsByDate[datePart] && conflictsByDate[datePart].includes(comp.ID.toString());
+                    
+                    // 格式化费用显示
+                    const feeValue = comp.FEE ? comp.FEE.toString().trim() : '';
+                    const feeDisplay = feeValue && feeValue !== '' && feeValue !== '0' ? `RM ${feeValue}` : '免费';
+                    
+                    // 格式化最后报名日期
+                    let lastRegisterDisplay = '未指定';
+                    if (comp["LAST REGISTER DATE"] && comp["LAST REGISTER DATE"].toString().trim() !== '') {
+                        try {
+                            let lastRegDate;
+                            if (typeof comp["LAST REGISTER DATE"] === 'number') {
+                                // Excel日期序列号
+                                const excelDate = comp["LAST REGISTER DATE"];
+                                lastRegDate = new Date((excelDate - (25567 + 2)) * 86400 * 1000);
+                            } else {
+                                lastRegDate = new Date(comp["LAST REGISTER DATE"]);
+                            }
+                            
+                            if (lastRegDate instanceof Date && !isNaN(lastRegDate)) {
+                                lastRegisterDisplay = lastRegDate.toLocaleDateString('zh-CN');
+                            } else {
+                                lastRegisterDisplay = comp["LAST REGISTER DATE"].toString();
+                            }
+                        } catch (e) {
+                            lastRegisterDisplay = comp["LAST REGISTER DATE"].toString();
+                        }
+                    }
+                    
+                    // 格式化时间显示
+                    const timeDisplay = comp.TIME ? comp.TIME.toString() : '时间未定';
+                    
+                    // 格式化比赛名称
+                    const nameDisplay = comp.NAME ? comp.NAME.toString() : '未命名比赛';
+                    
+                    html += `
+                        <div class="competition-card ${isConflict ? 'conflict' : ''}">
+                            ${isConflict ? '<div class="conflict-indicator">时间冲突</div>' : ''}
+                            <div class="card-header">
+                                <div class="competition-name">${nameDisplay}</div>
+                                <div class="competition-time">
+                                    <i class="far fa-clock"></i>
+                                    ${timeDisplay}
+                                </div>
+                            </div>
+                            <div class="card-details">
+                                <div class="detail-row">
+                                    <div class="detail-label">地点:</div>
+                                    <div class="detail-value">${comp.LOCATION || '未提供'}</div>
+                                </div>
+                                <div class="detail-row">
+                                    <div class="detail-label">联系人:</div>
+                                    <div class="detail-value">${comp["CONTACT NUMBER"] || '未提供'}</div>
+                                </div>
+                                <div class="detail-row">
+                                    <div class="detail-label">最后报名:</div>
+                                    <div class="detail-value">${lastRegisterDisplay}</div>
+                                </div>
+                                <div class="detail-row">
+                                    <div class="detail-label">报名方式:</div>
+                                    <div class="detail-value">
+                                        ${comp["REGISTER LINK"] ? 
+                                            (comp["REGISTER LINK"].toString().startsWith('http') ? 
+                                                `<a href="${comp["REGISTER LINK"]}" target="_blank" class="register-link">
+                                                    <i class="fas fa-external-link-alt"></i> 在线报名
+                                                </a>` : 
+                                                comp["REGISTER LINK"].toString()) 
+                                            : '未提供'}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <div class="fee-badge">${feeDisplay}</div>
+                                <div style="color: #666; font-size: 0.9rem;">
+                                    ID: ${comp.ID || 'N/A'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
+            });
+            
+            competitionsContainer.innerHTML = html;
+        }
+
+        // 刷新数据
+        function refreshData() {
+            loadDataFromUrl();
+        }
+
+        // 导出数据
+        function exportData() {
+            if (competitions.length === 0) {
+                showNotification('没有数据可导出', 'error');
+                return;
+            }
+            
+            // 创建CSV内容
+            const headers = ['ID', 'DATE', 'TIME', 'NAME', 'LOCATION', 'CONTACT NUMBER', 'REGISTER LINK', 'LAST REGISTER DATE', 'FEE'];
+            const csvRows = [];
+            
+            // 添加标题行
+            csvRows.push(headers.join(','));
+            
+            // 添加数据行
+            competitions.forEach(comp => {
+                const row = headers.map(header => {
+                    const value = comp[header] !== undefined ? comp[header] : '';
+                    // 处理包含逗号的值
+                    return `"${value}"`;
+                });
+                csvRows.push(row.join(','));
+            });
+            
+            // 创建CSV文件
+            const csvString = csvRows.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `比赛日程_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification('数据已导出为CSV文件！', 'success');
+        }
+
+        // 显示加载状态
+        function showLoading() {
+            competitionsContainer.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    正在从GitHub加载数据...
+                </div>
+            `;
+        }
+
+        // 显示通知
+        function showNotification(message, type) {
+            // 移除现有的通知
+            const existingNotification = document.querySelector('.notification');
+            if (existingNotification) {
+                existingNotification.remove();
+            }
+            
+            // 创建新通知
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background-color: ${type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'};
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: var(--border-radius);
+                    box-shadow: var(--box-shadow);
+                    z-index: 1000;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    animation: slideIn 0.3s ease;
+                ">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                    ${message}
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后移除通知
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+            
+            // 添加动画
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    </script>
+</body>
+</html>
